@@ -69,18 +69,18 @@
       yRand = Math.random() * 500 + 50 // genera valore tra 50 e 550
       cfu.create(xRand, yRand, 'star')
       if (score < 80){
-      tempoPersonale = 0.4 * score + 3
+      tempoPersonale = 0.1 * score + 3
       }
-      else tempoPersonale = 0.8
+      else tempoPersonale = 0.95
       window.setTimeout(spawnaQualcosa, tempoPersonale * 1000)
   }
   function spawnaQualcosa2(){ // Fai quello che vuoi qui
       xRand = Math.random() * 580 + 10 // genera un valore tra 10 e 590
       yRand = Math.random() * 500 + 50 // genera valore tra 500 e 550
       if (score < 80 ){ 
-      tempospawncoin = 0.6 * score + 3
+      tempospawncoin = 0.17 * score + 3
       }
-      else tempospawncoin = 0.8
+      else tempospawncoin = 9
       coin.create(xRand, yRand, 'coin')
       window.setTimeout(spawnaQualcosa2, tempospawncoin * 1000)
   }
@@ -88,9 +88,9 @@
       xRand = Math.random() * 580 + 10 // genera un valore tra 10 e 590
       yRand = Math.random() * 500 + 50 // genera valore tra 500 e 550 
       if (score < 80){
-      tempospawngold = 0.5 * score + 3
+      tempospawngold = 0.25 * score + 3
       }
-      else tempospawngold = 0.8
+      else tempospawngold = 13
       gold.create(xRand, yRand, 'gold')
       window.setTimeout(spawnaQualcosa3, tempospawngold * 1000)
   }
@@ -244,6 +244,10 @@ function collectcoin (player, coin)
     if (enemy.body.velocity.x < 0){
         enemy.setVelocityX(-enemyVelocity)
     }
+    document.addEventListener("touchstart", e => {
+        console.log('ciao')
+    })
+
     
     enemyVelocity = score * 1.4 + enemyVelocity1
   } // function update end. 
