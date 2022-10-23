@@ -1,0 +1,616 @@
+<!doctype html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8" />
+    <title>SNAKE | La Laurea di Salvo</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body style="background: #000">
+
+<script type="text/javascript">
+
+var sceneGlobal
+var snakeBody
+var screenSize
+var directions
+var cfu_scores
+var cfu_images
+var scoreText
+var ongoingAnimations
+var score
+
+window.onload = () => {
+
+    sceneGlobal
+    snakeBody = null;
+    screenSize = {width: innerWidth, height: innerHeight}
+    directions = {"right": 1, "up": -2, "left": -1, "down": 2};
+    cfu_scores = [3, 6, 10];
+    cfu_images = ["cfu_low", "cfu_med", "cfu_high"]
+    scoreText
+    ongoingAnimations = []
+    score = 0
+
+    // Calculate best gridCellSize
+    let columns
+    if(screenSize.width / screenSize.height > 1) columns = 30 // landscape
+    else columns = 15
+    var gridCellSize = Math.floor(screenSize.width / columns)
+    screenSize.width = gridCellSize * columns // update screen size
+    let maxRows = Math.floor(screenSize.height / gridCellSize)
+    screenSize.height = gridCellSize * maxRows
+
+    var gridOffset = Math.ceil(gridCellSize / 2)
+
+
+    var config = {
+        type: Phaser.AUTO,
+        width: screenSize.width,
+        height: screenSize.height,
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
+        }
+    };
+
+    var game = new Phaser.Game(config);
+
+    var Fruit = new Phaser.Class({
+            initialize:
+                function Fruit(scene){
+
+                    let totalX = screenSize.width / gridCellSize
+                    let totalY = screenSize.height / gridCellSize
+
+                    let x = Math.ceil(Math.random() * (totalX-2) + 1)
+                    let y = Math.ceil(Math.random() * (totalY-2) + 1)
+                    this.body = scene.add.circle(
+                        x*gridCellSize+gridOffset,
+                        y*gridCellSize+gridOffset,
+                        Math.ceil(gridCellSize*0.31),
+                        //0xff0000
+                    )
+
+		            let index = Math.floor( Math.random() * 3 )
+                    this.score = cfu_scores[index]
+                    this.image = scene.add.sprite(this.body.x, this.body.y, cfu_images[index])
+                    this.image.displayWidth = gridCellSize
+                    this.image.displayHeight = gridCellSize
+                },
+            destroy:
+                function(){
+                    this.body.destroy(true)
+                    this.image.destroy(true)
+                }
+        })
+    var PointsAnimation = new Phaser.Class({
+        initialize:
+            function PointsAnimation(scene, fruit, time){
+                this.scene = scene
+                this.counter = 36
+                this.interval = 1
+                this.done = false
+
+                this.nextTime = time + this.interval
+
+                let newX = fruit.body.x
+                let newY = fruit.body.y
+                this.text = scene.add.text(newX, newY, "+"+fruit.score, {fontSize: gridCellSize*0.9+"px", fill: "#f00"})
+		        let origX = 0.5, origY = 0.5
+                if(newX >= screenSize.width*0.8) origX = 1
+                if(newY <= screenSize.height*0.2) origY = 0
+		        this.text.setOrigin(origX, origY)
+
+            },
+        update: 
+            function(time){
+                if(time > this.nextTime){
+                    this.text.setY(this.text.y - 1 )
+                    this.counter--
+                   if(this.counter == 0){
+                        this.text.destroy()
+                        this.done = true
+                    }
+                    this.nextTime = time + this.interval
+                }
+            }
+    })
+
+    function preload (){
+        this.load.image("left", "assets/left.webp")
+        this.load.image("right", "assets/right.webp")
+        this.load.image("front", "assets/front.webp")
+
+        this.load.image(cfu_images[0], "assets/cfu_low.png")
+        this.load.image(cfu_images[1], "assets/cfu_medium.png")
+        this.load.image(cfu_images[2], "assets/cfu_high.png")
+    }
+
+    function setRect(rect){
+        rect.right = rect.x + rect.width
+        rect.bottom = rect.y + rect.height
+    }
+
+    function create (){
+        sceneGlobal = this 
+
+        var Snake = new Phaser.Class({
+            initialize: 
+                function Snake(scene, x, y){
+                    this.headPos = new Phaser.Geom.Point(x,y)
+
+                    this.scene = scene
+
+                    this.bodyPieceSize = Math.ceil(gridCellSize*0.93)
+                    this.alive = true
+                    this.collision = false
+
+                    // head
+                    //this.head = scene.add.rectangle(x, y, 10, 10, 0xffff00)
+                    this.head = new Phaser.GameObjects.Rectangle(
+                        scene, 
+                        x*gridCellSize + gridOffset, 
+                        y*gridCellSize + gridOffset, 
+                        this.bodyPieceSize, 
+                        this.bodyPieceSize, 
+                        //0xffff00
+                    )
+                    this.collisionHead = scene.add.rectangle(
+                        (x+1)*gridCellSize + gridOffset, 
+                        (y+1)*gridCellSize + gridOffset, 
+                        this.bodyPieceSize, 
+                        this.bodyPieceSize,
+                        0x0000ff
+                    )
+                    this.headImage = this.scene.add.sprite(this.head.x, this.head.y, "right")
+                    this.headImage.displayHeight = gridCellSize * 1.1
+                    this.headImage.displayWidth = gridCellSize * 1.1
+
+                    //body
+                    this.body = scene.add.group()
+                    this.body.add( this.head, true)
+                    this.body.getChildren()[0].setDepth(-1)
+
+                    this.speed = 100;
+                    this.moveTime = 0;
+                    this.direction = directions["right"]
+                    this.oldDirection = null
+                    this.lastUpdateDirection
+                },
+            update: 
+                function(time){
+                    if( time >= this.moveTime){
+                        if(this.direction == -this.lastUpdateDirection) // if direction is forbidden, we use the last
+                            this.direction = this.oldDirection
+                        
+                        this.lastUpdateDirection = this.direction
+                        this.move(time)
+                    }
+                },
+            newPiece: 
+                function (){
+                    let children = this.body.getChildren()
+                    let last = children[children.length-1]
+                    color = 0xffffff
+                    let r = new Phaser.GameObjects.Rectangle(this.scene, last.x, last.y, this.bodyPieceSize, this.bodyPieceSize, color)
+                    r.setDepth(-1)
+                    this.body.add( r, true )
+                },
+            changeDirection:
+                function(newDir){
+                    this.updateCollisionHead()
+
+                    if(this.direction == directions.down || this.direction == directions.up)
+                        if(newDir == directions.left || newDir == directions.right){
+                            this.headImage.setTexture( newDir == directions.left ? "left" : "right" )
+                            this.headImage.displayHeight = this.headImage.displayWidth = gridCellSize * 1.1
+                            this.oldDirection = this.direction
+                            this.direction = newDir
+                        }
+                        
+                    if(this.direction == directions.left || this.direction == directions["right"])
+                        if( newDir == directions.up || newDir == directions.down){
+                            this.headImage.setTexture("front")
+                            this.headImage.displayHeight = this.headImage.displayWidth = gridCellSize * 1.1
+                            this.oldDirection = this.direction
+                            this.direction = newDir
+                        }
+                },
+            checkOverlapping:
+                function(fruit){
+                    for(el of this.body.getChildren()){
+                        if( Phaser.Geom.Intersects.CircleToRectangle(fruit.body, el) )
+                            return true
+                    }
+                    return false
+                },
+            checkIngestion:
+                function(fruit){
+                    let center = fruit.body.getCenter()
+                    let circle = fruit.body.getBounds()
+                    circle.x = center.x
+                    circle.y = center.y
+                    let rect = new Phaser.Geom.Rectangle(this.head.x, this.head.y, this.head.width, this.head.height)
+
+                    let res = Phaser.Geom.Intersects.RectangleToRectangle(circle, rect)
+                    return res
+                },
+            updateCollisionHead:
+                function(){
+                    let ds = gridCellSize
+                    let newX = this.head.x
+                    let newY = this.head.y
+                    switch(this.direction){
+                        case directions["right"]:
+                            newX += ds
+                            break
+                        case directions["left"]:
+                            newX -= ds
+                            break
+                        case directions["up"]:
+                            newY -= ds
+                            break
+                        case directions["down"]:
+                            newY += ds
+                            break
+                    }
+
+                    this.collisionHead.setPosition(newX, newY)
+                    setRect(this.collisionHead)
+
+                },
+            checkCollision:
+                function(){
+                    this.updateCollisionHead()
+                    this.body.getChildren().forEach(setRect)
+                    let children = this.body.getChildren().slice(3)
+                    for( el of children ){
+                        if(Phaser.Geom.Intersects.RectangleToRectangle(this.collisionHead, el)){
+                            return true
+                        }
+                    }
+                    return false
+                },
+            move: 
+                function(time){
+                    if(time == "undefined"){
+                        console.log("Error in Snake.move! time is undefined")
+                    }
+
+                    let ds = gridCellSize
+                    
+
+                    // set X
+                    let oldX = this.head.x
+                    let newX = oldX
+                    if( this.direction == directions["right"] )
+                        newX += ds
+                    else if ( this.direction == directions["left"] )
+                        newX -= ds
+                    newX = Phaser.Math.Wrap(newX, 0, screenSize.width)
+
+                    // set Y
+                    let oldY = this.head.y
+                    let newY = oldY
+                    if ( this.direction == directions["up"] ) newY -= ds
+                    else if ( this.direction == directions["down"] ) newY += ds
+                    newY = Phaser.Math.Wrap(newY, 0, screenSize.height)
+
+                    this.body.shiftPosition(newX, newY, 1)
+
+                    this.headImage.setPosition(this.head.x, this.head.y)
+
+                    this.moveTime = time + this.speed
+                },
+            disappear:
+                function(){
+                    let children = this.body.getChildren().slice(1)
+                    for(el of children){
+                        el.setFillStyle(0x000)
+                    }
+                },
+            appear:
+                function(){
+                    let children = this.body.getChildren().slice(1)
+                    for(el of children){
+                        el.setFillStyle(0xffffff)
+                    }
+                },
+        })
+
+        snake = new Snake(this, 30, 30)
+
+        cursors = this.input.keyboard.createCursorKeys();
+        //this.input.addPointer(1)
+        
+        fruit = new Fruit(this)
+
+        scoreText = this.add.text(16, 16, 'CFU: 0', {fontSize: gridCellSize+"px", fill: "#0ff"})
+        scoreText.setDepth(1)
+    }
+
+
+    let swipeDir = null
+    let laurea = {triennale: false, magistrale: false}
+    function play(scene, time){
+        // Touch (or mouse) management
+        if(scene.input.activePointer.isDown && !touchActivated){
+            console.log("Touch activated")
+            touchActivated = true
+        }
+        if(!scene.input.activePointer.isDown && touchActivated){
+            console.log("Touch deactivated")
+            touchActivated = false
+            let dx = scene.input.activePointer.upX - scene.input.activePointer.downX
+            let dy = scene.input.activePointer.upY - scene.input.activePointer.downY
+            if( Math.abs(dx) > Math.abs(dy) ){ // horizontal swipe
+                swipeDir = dx > 0 ? directions["right"] : directions["left"]
+            }else{
+                swipeDir = dy > 0 ? directions["down"] : directions["up"]
+            }
+            //console.log(swipeDir)
+            touchEvent = true
+        }
+        // Input management 
+        if (touchEvent){ // touch event
+            snake.changeDirection(swipeDir)
+            touchEvent = false
+        } // Keyboard input        
+        if( cursors.left.isDown ) snake.changeDirection(directions["left"])
+        if( cursors.right.isDown ) snake.changeDirection(directions["right"])
+        if( cursors.up.isDown ) snake.changeDirection(directions["up"])
+        if( cursors.down.isDown )snake.changeDirection(directions["down"]) 
+
+        snake.update(time)
+        if(snake.checkIngestion(fruit)){
+            // animation
+            ongoingAnimations.push(new PointsAnimation(scene, fruit, 50)) 
+
+            // update score
+            score += fruit.score
+            scoreText.setText("CFU: "+score)
+
+            // elongate snake
+            snake.newPiece()
+
+            // make a new fruit
+            fruit.destroy()
+            fruit = new Fruit(scene)
+            while( snake.checkOverlapping(fruit) ){
+               fruit.destroy()
+               fruit = new Fruit(scene)
+            }
+
+            // check win
+            if(score >= 180 && !laurea.triennale){
+                laurea.triennale = true
+                return states.laureaTriennale
+            }
+            if(score >= 300 && !laurea.magistrale){
+                laurea.magistrale = true
+                return states.laureaMagistrale
+            }
+
+        }
+        if(snake.checkCollision()){
+            snake.alive = false
+            console.log("Collsione!!")
+            return states.gameOver
+        }
+        
+        return states.play
+    }
+    
+    goFirst = true
+    goCounter = 0
+    blinkState = false
+    blinkNextTime = 0
+    function gameOver(scene, time){
+        if(goFirst){
+            blinkNextTime = time + 1
+            goCounter = 6
+            goFirst = false
+        }
+
+        if(goCounter > 0 && time >= blinkNextTime){
+            if(!blinkState) snake.disappear()
+            else snake.appear()
+
+            blinkState = !blinkState
+
+            goCounter --
+            blinkNextTime = time + 300
+        }
+
+        if(goCounter == 0){
+            scene.add.text(screenSize.width/2, screenSize.height/2, "GAME OVER", {fontSize: gridCellSize, fill: "#0ff"})
+                .setOrigin()
+            if(score < 180)
+                scene.add.text(screenSize.width/2, screenSize.height/2+gridCellSize*1.4, "Non ti sei laureato! :(",
+                        {fontSize: gridCellSize, fill: "#0ff"})
+                    .setOrigin()
+            else if(score >= 180 && score < 300)
+                scene.add.text(screenSize.width/2, screenSize.height/2+gridCellSize*1.4, "Non hai preso la magistrale! :(",
+                        {fontSize: gridCellSize*0.8, fill: "#0ff"})
+                    .setOrigin()
+        }
+        
+
+        return states.gameOver
+    }
+
+
+    ltNextTime = 0
+    ltFirst = true
+    ltRect = null
+    ltSteps = 30
+    ltCounter = 30
+    ltState = 0
+    function laureaTriennale(scene, time){
+        if(ltFirst){
+            ltRect = scene.add.rectangle(0, screenSize.height, screenSize.width, screenSize.height, 0x00ffff)
+                .setOrigin(0).setDepth(3)
+            ltNextTime = time+1
+            ltFirst = false
+        }
+
+        if(ltCounter > 0 && time >= ltNextTime){
+            ltCounter--
+            switch(ltState){
+                case 0:
+                    ltRect.setY(ltRect.y - screenSize.height/ltSteps)
+                    ltNextTime = time+100
+                    break
+                case 1:
+                    ltNextTime = time + 1000
+                    break
+                case 2:
+                    ltRect.setY(ltRect.y - screenSize.height/ltSteps)
+                    ltNextTime = time+50
+                    break
+            }
+        }
+
+        if(ltCounter == 0){
+            switch(ltState){
+                case 0:
+                    ltText1 = scene.add.text(screenSize.width/2, screenSize.height/2, "Ti sei laureato!!!", {
+                        fontSize: gridCellSize, fill: "#000"
+                        }).setOrigin().setDepth(4)
+                    ltCounter = 2
+                    ltState = 1
+                    break
+                case 1:
+                ltText1.destroy()
+                    ltCounter = ltSteps
+                    ltState = 2
+                    break
+                case 2:
+                    return states.play
+            }
+        }
+
+        return states.laureaTriennale
+    }
+
+    lmNextTime = 0
+    lmFirst = true
+    lmRect = null
+    lmSteps = 30
+    lmCounter = 30
+    lmState = 0
+    function laureaMagistrale(scene, time){
+        if(lmFirst){
+            lmRect = scene.add.rectangle(0, screenSize.height, screenSize.width, screenSize.height, 0x00ffff)
+                .setOrigin(0).setDepth(3)
+            lmNextTime = time+1
+            lmFirst = false
+        }
+
+        if(lmCounter > 0 && time >= lmNextTime){
+            lmCounter--
+            switch(lmState){
+                case 0:
+                    lmRect.setY(lmRect.y - screenSize.height/lmSteps)
+                    lmNextTime = time+100
+                    break
+                case 1:
+                    lmNextTime = time + 1000
+                    break
+                case 2:
+                    lmRect.setY(lmRect.y - screenSize.height/lmSteps)
+                    lmNextTime = time+50
+                    break
+            }
+        }
+
+        if(lmCounter == 0){
+            switch(lmState){
+                case 0:
+                    lmText1 = scene.add.text(screenSize.width/2, screenSize.height/2, "Ti sei laureato anche in magistrale!!! :')", {
+                        fontSize: gridCellSize*0.6, fill: "#000"
+                        }).setOrigin().setDepth(4)
+                    lmCounter = 2
+                    lmState = 1
+                    break
+                case 1:
+                    lmText1.destroy()
+                    lmCounter = lmSteps
+                    lmState = 2
+                    break
+                case 2:
+                    return states.play
+            }
+        }
+
+        return states.laureaMagistrale
+    }
+
+
+
+    // Update state ariables
+    let spacePressed = false
+    let touchActivated = false
+    let touchEvent = false
+    
+    var states={
+        play: 0,
+        pause: 1,
+        intro: 2,
+        credits: 3,
+        gameOver: 4,
+        laureaTriennale: 5,
+        laureaMagistrale: 6,
+    }
+    let state = states.play
+
+    let triennale = false
+    let magistrale = false
+
+    function update(time, delta){
+        console.log(state)
+         
+        // Pause trigger
+        if( cursors.space.isDown && !spacePressed ) spacePressed = true
+        if( cursors.space.isUp && spacePressed){
+            state = state == states.play ? states.pause : states.play
+            spacePressed = false
+        }
+
+        switch(state){
+            case states.pause:
+                return
+            case states.play:
+                state = play(this, time)
+                break
+            case states.gameOver:
+                state = gameOver(this, time)
+                break
+            case states.laureaTriennale:
+                state = laureaTriennale(this, time)
+                break
+            case states.laureaMagistrale:
+                state = laureaMagistrale(this, time)
+                break
+        }
+
+        for(el of ongoingAnimations.entries()){
+            el[1].update(time)
+            if(el[1].done)
+	    	ongoingAnimations.splice(el[0], 1)
+        }
+
+    }
+
+}
+
+</script>
+
+</body>
+</html>

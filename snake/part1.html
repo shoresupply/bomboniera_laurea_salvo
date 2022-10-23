@@ -1,0 +1,203 @@
+<!doctype html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8" />
+    <title>Making your first Phaser 3 Game - Part 1</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+
+    var scene = null;
+    var sceneGlobal
+    var snakeBody = null;
+    var screenSize = {width: 800, height: 640}
+    var directions = {"right": 0, "up": 1, "left": 2, "down": 3};
+    var intersection
+
+    var config = {
+        type: Phaser.AUTO,
+        width: screenSize.width,
+        height: screenSize.height,
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
+        }
+    };
+
+    var game = new Phaser.Game(config);
+
+    var Fruit = new Phaser.Class({
+            initialize:
+                function Fruit(scene){
+
+                    let totalX = screenSize.width / 16
+                    let totalY = screenSize.height / 16
+
+                    let x = Math.ceil(Math.random() * (totalX-2) + 1)
+                    let y = Math.ceil(Math.random() * (totalY-2) + 1)
+                    this.body = scene.add.circle(x*16, y*16, 5, 0xff0000)
+                },
+            destroy:
+                function(){
+                    console.log(this)
+                    this.body.destroy(true)
+                }
+        })
+
+    function preload ()
+    {
+    }
+
+    function setRect(rect){
+        rect.right = rect.x + rect.width
+        rect.bottom = rect.y + rect.height
+    }
+
+    function create (){
+        sceneGlobal = this 
+
+
+        var Snake = new Phaser.Class({
+            initialize: 
+                function Snake(scene, x, y){
+                    this.headPos = new Phaser.Geom.Point(x,y)
+
+                    this.scene = scene
+
+                    this.bodyPieceSize = 15
+                    this.alive = true
+
+                    // head
+                    //this.head = scene.add.rectangle(x, y, 10, 10, 0xffff00)
+                    this.head = new Phaser.GameObjects.Rectangle(scene, x*16, y*16, this.bodyPieceSize, this.bodyPieceSize, 0xffff00)
+                    setRect(this.head)
+                    //body
+                    this.body = scene.add.group()
+                    this.body.add( this.head , true)
+
+                    this.speed = 100;
+                    this.moveTime = 0;
+                    this.direction = directions["right"]
+                },
+            update: 
+                function(time){
+                    if( time >= this.moveTime) this.move(time)
+                },
+            newPiece: 
+                function (){
+                    let children = this.body.getChildren()
+                    let last = children[children.length-1]
+                    let color = 0xffffff - children.length * 0x003030
+                    let r = new Phaser.GameObjects.Rectangle(this.scene, last.x, last.y, this.bodyPieceSize, this.bodyPieceSize, color)
+                    setRect(r)
+                    this.body.add( r, true )
+                },
+            changeDirection:
+                function(newDir){
+                    if(this.direction == directions.down || this.direction == directions.up)
+                        if( newDir == directions.left || newDir == directions.right) this.direction = newDir
+                        
+                    if(this.direction == directions.left || this.direction == directions["right"])
+                        if( newDir == directions.up || newDir == directions.down) this.direction = newDir
+                },
+            checkIngestion:
+                function(fruit){
+                    return Phaser.Geom.Intersects.CircleToRectangle(fruit.body, this.head)
+                },
+            checkCollision:
+                function(){
+                    let children = this.body.getChildren().slice(3)
+                    for( el of children ){
+                        if(Phaser.Geom.Intersects.RectangleToRectangle(this.head, el)){
+                            return true
+                        }
+                    }
+                    return false
+                },
+            move: 
+                function(time){
+                    if(time == "undefined"){
+                        console.log("Error in Snake.move! time is undefined")
+                    }
+
+                    let ds = 16
+
+                    // set X
+                    oldX = this.head.x
+                    let newX = oldX
+                    if( this.direction == directions["right"] )
+                        newX += ds
+                    else if ( this.direction == directions["left"] )
+                        newX -= ds
+
+                    newX = Phaser.Math.Wrap(newX, 0, screenSize.width)
+                    //this.head.setX( newX )
+
+                    // set Y
+                    let oldY = this.head.y
+                    let newY = oldY
+                    if ( this.direction == directions["up"] ) newY -= ds
+                    else if ( this.direction == directions["down"] ) newY += ds
+
+                    newY = Phaser.Math.Wrap(newY, 0, screenSize.height)
+
+                    this.body.shiftPosition(newX, newY, 1)
+
+                    this.moveTime = time + this.speed
+                }
+        })
+
+        snake = new Snake(this, 30, 30)
+        //snake = this.add.group()
+        //r =  new Phaser.GameObjects.Rectangle(0, 0, 100, 100)
+        cursors = this.input.keyboard.createCursorKeys();
+        fruit = new Fruit(this)
+    }
+
+    let spacePressed = false
+    function update(time, delta){
+
+        if( cursors.space.isDown && !spacePressed ) spacePressed = true
+        if( cursors.space.isUp && spacePressed){
+            snake.alive = !snake.alive
+            spacePressed = false
+        }
+
+        if(!snake.alive) return // pause
+
+        if( cursors.left.isDown ){
+            snake.changeDirection(directions["left"])
+        }
+        if( cursors.right.isDown ){ 
+            snake.changeDirection(directions["right"])
+        }
+        if( cursors.up.isDown ){ 
+            snake.changeDirection(directions["up"])
+        }
+        if( cursors.down.isDown ){
+            snake.changeDirection(directions["down"])
+        }
+
+        snake.update(time)
+        if(snake.checkIngestion(fruit)){
+            snake.newPiece()
+            fruit.destroy()
+            fruit = new Fruit(this)
+        }
+        if(snake.checkCollision()){
+          console.log("Collsione!!")
+        }
+    }
+
+</script>
+
+</body>
+</html>
