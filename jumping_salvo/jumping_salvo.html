@@ -7,39 +7,68 @@
     <style type="text/css">
         body {
             margin: 0;
+            text-align: center;
+            width: 100%;
+            height: 100%
+        }
+
+        canvas{
+            margin: 0 auto;
         }
     </style>
 </head>
 <body>
 
 <script type="text/javascript">
+
+var timer1, timer2, timer3
+var platformScaleFactor = 1
+var spriteScaleFactor = 1
+var nPlatforms = 6
+var scene
+
+var enemy
+var player
+
+var physicsFactor = 300
+var jmpSpeed
+
+window.onload = () => {
   // Variabili globali
   var score = 0;
   var scoreText;
-  var mainHeight = 800;
-  var mainWidth = 600;
   var cfu
   var coin 
   var gold
-  var scene = null
+  scene = null
   var tempoPersonale = 1 // Tempo in secondi
   var tempospawncoin = 13
   var tempospawngold = 25
   let nuova = 0
   let vecchia = 0
-    var platforms;
+  var platforms;
+  
+  cfu_scores = [3, 6, 10];
+  cfu_images = ["cfu_low", "cfu_med", "cfu_high"]
 
-    let enemyVelocity1 = 50
-    let enemyVelocity = enemyVelocity1
+  let enemyVelocity = 100
+  let initialEnemyVelocity = enemyVelocity
+
+  var screenSize = {width: window.innerWidth, height: window.innerHeight, }
+  console.log("Innerwidth is "+ screenSize.width)
+
+  physicsFactor = screenSize.height / 2
+  jmpSpeed = physicsFactor 
+
   var config = {
       type: Phaser.AUTO,
-      width: mainWidth,
-      height: mainHeight,
+      width: screenSize.width,
+      height: screenSize.height,
       physics: {
           default: 'arcade',
           arcade: {
-              gravity: { y: 300 },
-              debug: false
+              gravity: { y: physicsFactor },
+              debug: true
           }
       },
       scene: {
@@ -52,47 +81,52 @@
   var game = new Phaser.Game(config);
   let RightPressed = false
 
+  function randomCoordinates(){
+    xRand = Math.random() * screenSize.width * 0.8 + screenSize.width * 0.1
+    yRand = Math.random() * screenSize.height * 0.5 + screenSize.height * 0.1 // genera valore tra 50 e 550
+
+    return new Phaser.Math.Vector2(xRand, yRand)
+  }
+
   function preload (){
       this.load.image('sky', 'assets/sky.png');
+
       this.load.image('ground', 'assets/platform.png');
-      this.load.image('star', 'assets/star.png');
+      
+      this.load.image('low', 'assets/star.png');
+      this.load.image('med', 'assets/coin.png');
+      this.load.image('high', 'assets/gold.png');
+      
       this.load.image('bomb', 'assets/bomb.png');
+      
       this.load.image ('piattaforma2', 'assets/piattaforma2.png');
       this.load.spritesheet('dude', 'assets/dude.png', { frameWidth: 32, frameHeight: 48 });
-      this.load.image('coin', 'assets/coin.png');
       this.load.image('enemy', 'assets/enemy.png');
-      this.load.image('gold', 'assets/gold.png');
   }
   
-  function spawnaQualcosa(){ // Fai quello che vuoi qui
-      xRand = Math.random() * 580 + 10 // genera un valore tra 10 e 590
-      yRand = Math.random() * 500 + 50 // genera valore tra 50 e 550
-      cfu.create(xRand, yRand, 'star')
-      if (score < 80){
-      tempoPersonale = 0.1 * score + 3
-      }
-      else tempoPersonale = 0.95
-      window.setTimeout(spawnaQualcosa, tempoPersonale * 1000)
-  }
-  function spawnaQualcosa2(){ // Fai quello che vuoi qui
-      xRand = Math.random() * 580 + 10 // genera un valore tra 10 e 590
-      yRand = Math.random() * 500 + 50 // genera valore tra 500 e 550
-      if (score < 80 ){ 
-      tempospawncoin = 0.17 * score + 3
-      }
-      else tempospawncoin = 9
-      coin.create(xRand, yRand, 'coin')
-      window.setTimeout(spawnaQualcosa2, tempospawncoin * 1000)
-  }
-  function spawnaQualcosa3(){ // Fai quello che vuoi qui
-      xRand = Math.random() * 580 + 10 // genera un valore tra 10 e 590
-      yRand = Math.random() * 500 + 50 // genera valore tra 500 e 550 
-      if (score < 80){
-      tempospawngold = 0.25 * score + 3
-      }
-      else tempospawngold = 13
-      gold.create(xRand, yRand, 'gold')
-      window.setTimeout(spawnaQualcosa3, tempospawngold * 1000)
+  let nextTime = 100
+  let nextSpawnTime1 = 0, nextSpawnTime2 = tempospawncoin * 1000, nextSpawnTime3 = tempospawngold * 1000
+  function spawn(time){
+    if(time < nextTime) return
+    else nextTime = time + 100
+    if(time > nextSpawnTime1){
+        pos = randomCoordinates()
+        cfu.create(pos.x, pos.y, 'low').setData({"value": cfu_scores[0]})
+        tempoPersonale = score < 80 ? 0.1 * score + 3 : tempoPersonale = 0.95
+        nextSpawnTime1 = time + tempoPersonale * 1000
+    }
+    if(time > nextSpawnTime2){
+        pos = randomCoordinates()
+        cfu.create(pos.x, pos.y, 'med').setData({"value": cfu_scores[1]})
+        tempospawncoin = score < 80 ? 0.17 * score + 3 : tempospawncoin = 9
+        nextSpawnTime2 = time + tempospawncoin * 1000
+    }
+    if(time > nextSpawnTime3){
+        pos = randomCoordinates()
+        cfu.create(pos.x, pos.y, 'high').setData({"value": cfu_scores[2]})
+        tempospawngold = score < 80 ? 0.25 * score + 3 : tempospawngold = 13
+        nextSpawnTime3 = time + tempospawngold * 1000
+    }
   }
   
   function create (){
@@ -101,37 +135,53 @@
     coin = this.physics.add.group()
     gold = this.physics.add.group()
 
-    var timer = window.setTimeout(spawnaQualcosa, tempoPersonale * 1000) 
-    var timer2 = window.setTimeout(spawnaQualcosa2,  tempospawncoin * 1000)
-    var timer3 = window.setTimeout(spawnaQualcosa3, tempospawngold * 1000)
     // Let the camera see two times the width but only one height. This will be used
     // for the game to flow right.
-    this.cameras.main.setBounds(0, 0, mainWidth, mainHeight);
+    this.cameras.main.setBounds(0, 0, screenSize.width, screenSize.height);
     
     // The physics of the world is bounded by what the player can see, i.e. the camera view
-    this.physics.world.setBounds(0, 0, mainWidth, mainHeight);
+    this.physics.world.setBounds(0, 0, screenSize.width, screenSize.height);
     
     // Print the sky    
-    this.add.image(400, 300, 'sky');
+    background = this.add.image(0, 0, 'sky').setOrigin(0,0);
+    background.displayWidth = screenSize.width;
+    background.displayHeight = screenSize.height;
     //this.add.image (400, 100, 'piattaforma2')
 
     // Generate platforms as static rigid body, for physics interactions
-    platforms = this.physics.add.staticGroup();
-    
-    ppp = [] // Cos'è ppp ? 
-    for(let i=0; i<6; i++){  // Gnereate the ground: 6 tiles on the low position 
-      platforms.create(200*i+100, 650, 'piattaforma2');
+    let a = this.add.image(400, 400, "piattaforma2")
+    let w = a.displayWidth
+    let h = a.displayHeight
+    a.destroy()
+
+    platformScaleFactor = (screenSize.width / nPlatforms) / w
+    w = platformScaleFactor*w
+    h = platformScaleFactor*h
+
+    platformsImgs = this.add.group();
+    for(let i=0; i<6; i++){  // Generate the ground: 6 tiles on the low position 
+      let newP = this.add.image(w*i, screenSize.height-h, 'piattaforma2').setOrigin(0);
+      newP.setScale(platformScaleFactor)
+      platformsImgs.add(newP)
     }
 
+    let r = this.add.rectangle(0, screenSize.height-h, 6*w, h,).setOrigin(0)
+    let platforms = this.physics.add.staticGroup([r])
+
+    spriteScaleFactor = 2 * platformScaleFactor
+
     // Place the player as a rigid active body
-    player = this.physics.add.sprite(100, 450, 'dude');
-    enemy = this.physics.add.sprite(50, 550, 'enemy')  ;
+    player = this.physics.add.sprite(screenSize.width/2, screenSize.height * 0.5, 'dude');
+    player.setBounce(1, 0);
+    player.scale = spriteScaleFactor;
+    player.setCollideWorldBounds(true);
+
+    enemy = this.physics.add.sprite(screenSize.width*0.1, screenSize.height * 0.5, 'enemy');
     enemy.setBounce(1,0);
     enemy.setCollideWorldBounds(true);
-    player.setBounce(1, 0);
-    player.setCollideWorldBounds(true); // ?
-    enemy.setVelocityX(enemyVelocity1)
-    enemy.setSize(48, 58, false)
+    enemy.scale = spriteScaleFactor
+    enemy.setVelocityX(enemyVelocity)
+    //enemy.setSize(48, 58, false)
 
     // Create animations for the player (used when the player moves)
     this.anims.create({ // Going left
@@ -153,63 +203,53 @@
     });
     
     // Player-platfrom interaction 
+
     this.physics.add.collider(enemy, platforms);
+    this.physics.add.collider(player, enemy, hitEnemy, null, this);
+
     this.physics.add.collider(player, platforms);
+
     this.physics.add.collider(cfu, platforms);
-    this.physics.add.overlap(player, cfu, collectcfu, null, this);
     this.physics.add.collider(coin, platforms);
     this.physics.add.collider(gold, platforms);
-    this.physics.add.overlap(player, coin, collectcoin, null, this);
-    this.physics.add.overlap(player, gold, collectgold, null, this);
-    this.physics.add.collider(player, enemy, hitEnemy, null, this);
-    // var variables are global, occupying memory witouth a reason.
-    // local variable are created with let and exist only in the present scope
     
-    
-    // Generate a platform in a random position
-    //platforms.create(posx, posy, 'piattaforma2')
-    
-    
-    //platforms.create(posx, posy, 'piattaforma2') //? Cazzo è questa?
+    this.physics.add.overlap(player, cfu, collectcfu, null, this);
+    this.physics.add.overlap(player, coin, collectcfu, null, this);
+    this.physics.add.overlap(player, gold, collectcfu, null, this);
+
     this.cameras.main.startFollow(player);
     player.setVelocityX(200)
-    function collectcfu (player, cfu)
-{   
-    cfu.disableBody(true, true);
+    function collectcfu (player, cfu){   
+        score += cfu.getData("value")
+        cfu.destroy(true, true)
+        scoreText.setText('Score: ' + score);
+    }
+    function collectgold (player, gold){   
+        gold.destroy(true, true);
+        score += 10;
+        scoreText.setText('Score: ' + score);
+    }
+    function hitEnemy(player, enemy){
+        this.physics.pause();
+        player.setTint(0xff0000);
+        player.anims.play('turn');
+        gameOver = true;
+        
+    }
 
-    score += 6;
-    scoreText.setText('Score: ' + score);
-}
-function collectgold (player, gold)
-{   
-    gold.disableBody(true, true);
+    function collectcoin (player, coin){   
+        coin.destroy(true, true);
 
-    score += 10;
-    scoreText.setText('Score: ' + score);
-}
-function hitEnemy(player, enemy)
-{
-    this.physics.pause();
-
-    player.setTint(0xff0000);
-
-    player.anims.play('turn');
-
-    gameOver = true;
-    
-}
-
-function collectcoin (player, coin)
-{   
-    coin.disableBody(true, true);
-
-    score += 15;
-    scoreText.setText('Score: ' + score);
-}
+        score += 15;
+        scoreText.setText('Score: ' + score);
+    }
     scoreText = this.add.text(16, 16, 'score: 0', { fontSize: '32px', fill: '#000' });
   } // End of function create
 
-  function update (){ // Called each frame 
+  function update(time, delta){ // Called each frame 
+
+    spawn(time)
+
     vecchia = nuova
     nuova = player.body.velocity.x 
     if (nuova != vecchia){
@@ -236,7 +276,7 @@ function collectcoin (player, coin)
 
 
     if (cursors.up.isDown && player.body.touching.down){ // up key is pressed and the player is on gruound
-        player.setVelocityY(-300); // set velocity
+        player.setVelocityY(-jmpSpeed); // set velocity
     }
     if (enemy.body.velocity.x > 0){
         enemy.setVelocityX(enemyVelocity)
@@ -249,9 +289,10 @@ function collectcoin (player, coin)
     })
 
     
-    enemyVelocity = score * 1.4 + enemyVelocity1
+    enemyVelocity = score * 1.4 + initialEnemyVelocity
   } // function update end. 
   
+}
 </script>
 
 </body>
