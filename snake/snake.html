@@ -64,7 +64,6 @@ window.onload = () => {
     var Fruit = new Phaser.Class({
             initialize:
                 function Fruit(scene){
-
                     let totalX = screenSize.width / gridCellSize
                     let totalY = screenSize.height / gridCellSize
 
@@ -76,7 +75,6 @@ window.onload = () => {
                         Math.ceil(gridCellSize*0.31),
                         //0xff0000
                     )
-
 		            let index = Math.floor( Math.random() * 3 )
                     this.score = cfu_scores[index]
                     this.image = scene.add.sprite(this.body.x, this.body.y, cfu_images[index])
@@ -121,223 +119,213 @@ window.onload = () => {
                 }
             }
     })
+    var Snake = new Phaser.Class({
+        destroy:
+            function(){
+                this.body.destroy(true, true)
+                this.collisionHead.destroy()
+                this.headImage.destroy()
+            },
+        initialize: 
+            function Snake(scene, x, y){
+                this.headPos = new Phaser.Geom.Point(x,y)
 
-    function preload (){
-        this.load.image("left", "assets/left.webp")
-        this.load.image("right", "assets/right.webp")
-        this.load.image("front", "assets/front.webp")
+                this.layer = scene.add.layer()
 
-        this.load.image(cfu_images[0], "assets/cfu_low.png")
-        this.load.image(cfu_images[1], "assets/cfu_medium.png")
-        this.load.image(cfu_images[2], "assets/cfu_high.png")
-    }
+                this.scene = scene
+
+                this.bodyPieceSize = Math.ceil(gridCellSize*0.93)
+                this.alive = true
+                this.collision = false
+
+                // head
+                //this.head = scene.add.rectangle(x, y, 10, 10, 0xffff00)
+                this.head = new Phaser.GameObjects.Rectangle(
+                    scene, 
+                    x*gridCellSize + gridOffset, 
+                    y*gridCellSize + gridOffset, 
+                    this.bodyPieceSize, 
+                    this.bodyPieceSize, 
+                    //0xffff00
+                )
+                this.collisionHead = scene.add.rectangle(
+                    (x+1)*gridCellSize + gridOffset, 
+                    (y+1)*gridCellSize + gridOffset, 
+                    this.bodyPieceSize, 
+                    this.bodyPieceSize,
+                    //0x0000ff
+                )
+                this.headImage = this.scene.add.sprite(this.head.x, this.head.y, "right")
+                this.headImage.displayHeight = gridCellSize * 1.1
+                this.headImage.displayWidth = gridCellSize * 1.1
+
+                //body
+                this.body = scene.add.group()
+                this.body.add( this.head, true)
+                this.body.getChildren()[0].setDepth(-1)
+
+                this.speed = 100;
+                this.moveTime = 0;
+                this.direction = directions["right"]
+                this.oldDirection = null
+                this.lastUpdateDirection
+            },
+        update: 
+            function(time){
+                if( time >= this.moveTime){
+                    if(this.direction == -this.lastUpdateDirection) // if direction is forbidden, we use the last
+                        this.direction = this.oldDirection
+                    
+                    this.lastUpdateDirection = this.direction
+                    this.move(time)
+                }
+            },
+        newPiece: 
+            function (){
+                let children = this.body.getChildren()
+                let last = children[children.length-1]
+                color = 0xffffff
+                let r = new Phaser.GameObjects.Rectangle(this.scene, last.x, last.y, this.bodyPieceSize, this.bodyPieceSize, color)
+                r.setDepth(-1)
+                this.body.add( r, true )
+            },
+        changeDirection:
+            function(newDir){
+                this.updateCollisionHead()
+
+                if(this.direction == directions.down || this.direction == directions.up)
+                    if(newDir == directions.left || newDir == directions.right){
+                        this.headImage.setTexture( newDir == directions.left ? "left" : "right" )
+                        this.headImage.displayHeight = this.headImage.displayWidth = gridCellSize * 1.1
+                        this.oldDirection = this.direction
+                        this.direction = newDir
+                    }
+                    
+                if(this.direction == directions.left || this.direction == directions["right"])
+                    if( newDir == directions.up || newDir == directions.down){
+                        this.headImage.setTexture("front")
+                        this.headImage.displayHeight = this.headImage.displayWidth = gridCellSize * 1.1
+                        this.oldDirection = this.direction
+                        this.direction = newDir
+                    }
+            },
+        checkOverlapping:
+            function(fruit){
+                for(el of this.body.getChildren()){
+                    if( Phaser.Geom.Intersects.CircleToRectangle(fruit.body, el) )
+                        return true
+                }
+                return false
+            },
+        checkIngestion:
+            function(fruit){
+                let center = fruit.body.getCenter()
+                let circle = fruit.body.getBounds()
+                circle.x = center.x
+                circle.y = center.y
+                let rect = new Phaser.Geom.Rectangle(this.head.x, this.head.y, this.head.width, this.head.height)
+
+                let res = Phaser.Geom.Intersects.RectangleToRectangle(circle, rect)
+                return res
+            },
+        updateCollisionHead:
+            function(){
+                let ds = gridCellSize
+                let newX = this.head.x
+                let newY = this.head.y
+                switch(this.direction){
+                    case directions["right"]:
+                        newX += ds
+                        break
+                    case directions["left"]:
+                        newX -= ds
+                        break
+                    case directions["up"]:
+                        newY -= ds
+                        break
+                    case directions["down"]:
+                        newY += ds
+                        break
+                }
+
+                this.collisionHead.setPosition(newX, newY)
+                setRect(this.collisionHead)
+
+            },
+        checkCollision:
+            function(){
+                this.updateCollisionHead()
+                this.body.getChildren().forEach(setRect)
+                let children = this.body.getChildren().slice(3)
+                for( el of children ){
+                    if(Phaser.Geom.Intersects.RectangleToRectangle(this.collisionHead, el)){
+                        return true
+                    }
+                }
+                return false
+            },
+        move: 
+            function(time){
+                if(time == "undefined"){
+                    console.log("Error in Snake.move! time is undefined")
+                }
+
+                let ds = gridCellSize
+                
+
+                // set X
+                let oldX = this.head.x
+                let newX = oldX
+                if( this.direction == directions["right"] )
+                    newX += ds
+                else if ( this.direction == directions["left"] )
+                    newX -= ds
+                newX = Phaser.Math.Wrap(newX, 0, screenSize.width)
+
+                // set Y
+                let oldY = this.head.y
+                let newY = oldY
+                if ( this.direction == directions["up"] ) newY -= ds
+                else if ( this.direction == directions["down"] ) newY += ds
+                newY = Phaser.Math.Wrap(newY, 0, screenSize.height)
+
+                this.body.shiftPosition(newX, newY, 1)
+
+                this.headImage.setPosition(this.head.x, this.head.y)
+
+                this.moveTime = time + this.speed
+            },
+        disappear:
+            function(){
+                this.body.setVisible(false, 1)
+            },
+        appear:
+            function(){
+                this.body.setVisible(true, 1)
+            },
+    })
+
+    
 
     function setRect(rect){
         rect.right = rect.x + rect.width
         rect.bottom = rect.y + rect.height
     }
 
-    function create (){
-        sceneGlobal = this 
 
-        var Snake = new Phaser.Class({
-            initialize: 
-                function Snake(scene, x, y){
-                    this.headPos = new Phaser.Geom.Point(x,y)
-
-                    this.scene = scene
-
-                    this.bodyPieceSize = Math.ceil(gridCellSize*0.93)
-                    this.alive = true
-                    this.collision = false
-
-                    // head
-                    //this.head = scene.add.rectangle(x, y, 10, 10, 0xffff00)
-                    this.head = new Phaser.GameObjects.Rectangle(
-                        scene, 
-                        x*gridCellSize + gridOffset, 
-                        y*gridCellSize + gridOffset, 
-                        this.bodyPieceSize, 
-                        this.bodyPieceSize, 
-                        //0xffff00
-                    )
-                    this.collisionHead = scene.add.rectangle(
-                        (x+1)*gridCellSize + gridOffset, 
-                        (y+1)*gridCellSize + gridOffset, 
-                        this.bodyPieceSize, 
-                        this.bodyPieceSize,
-                        0x0000ff
-                    )
-                    this.headImage = this.scene.add.sprite(this.head.x, this.head.y, "right")
-                    this.headImage.displayHeight = gridCellSize * 1.1
-                    this.headImage.displayWidth = gridCellSize * 1.1
-
-                    //body
-                    this.body = scene.add.group()
-                    this.body.add( this.head, true)
-                    this.body.getChildren()[0].setDepth(-1)
-
-                    this.speed = 100;
-                    this.moveTime = 0;
-                    this.direction = directions["right"]
-                    this.oldDirection = null
-                    this.lastUpdateDirection
-                },
-            update: 
-                function(time){
-                    if( time >= this.moveTime){
-                        if(this.direction == -this.lastUpdateDirection) // if direction is forbidden, we use the last
-                            this.direction = this.oldDirection
-                        
-                        this.lastUpdateDirection = this.direction
-                        this.move(time)
-                    }
-                },
-            newPiece: 
-                function (){
-                    let children = this.body.getChildren()
-                    let last = children[children.length-1]
-                    color = 0xffffff
-                    let r = new Phaser.GameObjects.Rectangle(this.scene, last.x, last.y, this.bodyPieceSize, this.bodyPieceSize, color)
-                    r.setDepth(-1)
-                    this.body.add( r, true )
-                },
-            changeDirection:
-                function(newDir){
-                    this.updateCollisionHead()
-
-                    if(this.direction == directions.down || this.direction == directions.up)
-                        if(newDir == directions.left || newDir == directions.right){
-                            this.headImage.setTexture( newDir == directions.left ? "left" : "right" )
-                            this.headImage.displayHeight = this.headImage.displayWidth = gridCellSize * 1.1
-                            this.oldDirection = this.direction
-                            this.direction = newDir
-                        }
-                        
-                    if(this.direction == directions.left || this.direction == directions["right"])
-                        if( newDir == directions.up || newDir == directions.down){
-                            this.headImage.setTexture("front")
-                            this.headImage.displayHeight = this.headImage.displayWidth = gridCellSize * 1.1
-                            this.oldDirection = this.direction
-                            this.direction = newDir
-                        }
-                },
-            checkOverlapping:
-                function(fruit){
-                    for(el of this.body.getChildren()){
-                        if( Phaser.Geom.Intersects.CircleToRectangle(fruit.body, el) )
-                            return true
-                    }
-                    return false
-                },
-            checkIngestion:
-                function(fruit){
-                    let center = fruit.body.getCenter()
-                    let circle = fruit.body.getBounds()
-                    circle.x = center.x
-                    circle.y = center.y
-                    let rect = new Phaser.Geom.Rectangle(this.head.x, this.head.y, this.head.width, this.head.height)
-
-                    let res = Phaser.Geom.Intersects.RectangleToRectangle(circle, rect)
-                    return res
-                },
-            updateCollisionHead:
-                function(){
-                    let ds = gridCellSize
-                    let newX = this.head.x
-                    let newY = this.head.y
-                    switch(this.direction){
-                        case directions["right"]:
-                            newX += ds
-                            break
-                        case directions["left"]:
-                            newX -= ds
-                            break
-                        case directions["up"]:
-                            newY -= ds
-                            break
-                        case directions["down"]:
-                            newY += ds
-                            break
-                    }
-
-                    this.collisionHead.setPosition(newX, newY)
-                    setRect(this.collisionHead)
-
-                },
-            checkCollision:
-                function(){
-                    this.updateCollisionHead()
-                    this.body.getChildren().forEach(setRect)
-                    let children = this.body.getChildren().slice(3)
-                    for( el of children ){
-                        if(Phaser.Geom.Intersects.RectangleToRectangle(this.collisionHead, el)){
-                            return true
-                        }
-                    }
-                    return false
-                },
-            move: 
-                function(time){
-                    if(time == "undefined"){
-                        console.log("Error in Snake.move! time is undefined")
-                    }
-
-                    let ds = gridCellSize
-                    
-
-                    // set X
-                    let oldX = this.head.x
-                    let newX = oldX
-                    if( this.direction == directions["right"] )
-                        newX += ds
-                    else if ( this.direction == directions["left"] )
-                        newX -= ds
-                    newX = Phaser.Math.Wrap(newX, 0, screenSize.width)
-
-                    // set Y
-                    let oldY = this.head.y
-                    let newY = oldY
-                    if ( this.direction == directions["up"] ) newY -= ds
-                    else if ( this.direction == directions["down"] ) newY += ds
-                    newY = Phaser.Math.Wrap(newY, 0, screenSize.height)
-
-                    this.body.shiftPosition(newX, newY, 1)
-
-                    this.headImage.setPosition(this.head.x, this.head.y)
-
-                    this.moveTime = time + this.speed
-                },
-            disappear:
-                function(){
-                    let children = this.body.getChildren().slice(1)
-                    for(el of children){
-                        el.setFillStyle(0x000)
-                    }
-                },
-            appear:
-                function(){
-                    let children = this.body.getChildren().slice(1)
-                    for(el of children){
-                        el.setFillStyle(0xffffff)
-                    }
-                },
-        })
-
-        snake = new Snake(this, 30, 30)
-
-        cursors = this.input.keyboard.createCursorKeys();
-        //this.input.addPointer(1)
-        
-        fruit = new Fruit(this)
-
-        scoreText = this.add.text(16, 16, 'CFU: 0', {fontSize: gridCellSize+"px", fill: "#0ff"})
-        scoreText.setDepth(1)
+    function checkSpaceButton(scene, time, currentState){
+        if( cursors.space.isDown && !spacePressed ) spacePressed = true
+        if( cursors.space.isUp && spacePressed){
+            spacePressed = false
+            if(state == states.play) return states.pause
+            if(state == states.pause) return states.play
+        }
+        return state
     }
-
 
     let swipeDir = null
     let laurea = {triennale: false, magistrale: false}
+    let playLayer
     function play(scene, time){
         // Touch (or mouse) management
         if(scene.input.activePointer.isDown && !touchActivated){
@@ -355,7 +343,7 @@ window.onload = () => {
                 swipeDir = dy > 0 ? directions["down"] : directions["up"]
             }
             //console.log(swipeDir)
-            touchEvent = true
+            touchEvent = scene.input.activePointer.downY >= 3*gridCellSize ? true : false
         }
         // Input management 
         if (touchEvent){ // touch event
@@ -404,13 +392,14 @@ window.onload = () => {
             return states.gameOver
         }
         
-        return states.play
+        return checkSpaceButton(scene, time, state)
     }
     
     goFirst = true
     goCounter = 0
     blinkState = false
     blinkNextTime = 0
+    var gameOverLayer
     function gameOver(scene, time){
         if(goFirst){
             blinkNextTime = time + 1
@@ -428,17 +417,8 @@ window.onload = () => {
             blinkNextTime = time + 300
         }
 
-        if(goCounter == 0){
-            scene.add.text(screenSize.width/2, screenSize.height/2, "GAME OVER", {fontSize: gridCellSize, fill: "#0ff"})
-                .setOrigin()
-            if(score < 180)
-                scene.add.text(screenSize.width/2, screenSize.height/2+gridCellSize*1.4, "Non ti sei laureato! :(",
-                        {fontSize: gridCellSize, fill: "#0ff"})
-                    .setOrigin()
-            else if(score >= 180 && score < 300)
-                scene.add.text(screenSize.width/2, screenSize.height/2+gridCellSize*1.4, "Non hai preso la magistrale! :(",
-                        {fontSize: gridCellSize*0.8, fill: "#0ff"})
-                    .setOrigin()
+        if(goCounter == 0){ // The animation is done. We go to restartScreen state
+            return states.restartScreen
         }
         
 
@@ -472,6 +452,7 @@ window.onload = () => {
                     break
                 case 2:
                     ltRect.setY(ltRect.y - screenSize.height/ltSteps)
+                    ltText1.setY(ltText1.y - screenSize.height/ltSteps)
                     ltNextTime = time+50
                     break
             }
@@ -487,11 +468,13 @@ window.onload = () => {
                     ltState = 1
                     break
                 case 1:
-                ltText1.destroy()
                     ltCounter = ltSteps
                     ltState = 2
+                    ltNextTime = 0 // force text to desappear quickly
                     break
                 case 2:
+                    ltText1.destroy()   
+                    ltRect.destroy()
                     return states.play
             }
         }
@@ -552,12 +535,142 @@ window.onload = () => {
         return states.laureaMagistrale
     }
 
+    let introLayer
+    function intro(scene){
+        return states.intro
+    }
 
+    var pauseLayer
+    function stateTransition(scene, newState, oldState){
+        console.log("Old: "+oldState+" new: "+newState)
+        if(oldState === states.restartScreen && newState === states.intro){
+            gameOverLayer.destroy()
+            if(score > 0){
+                snake.destroy()
+                fruit.destroy()
+                scoreText.destroy()
+            }
+            score = 0
+
+            introLayer = scene.add.layer()
+            let background = scene.add.rectangle(0, 0, screenSize.width, screenSize.height, 0)
+            background.setOrigin(0)
+            introLayer.add([background])
+
+            let button = scene.add.rectangle(screenSize.width/2, screenSize.height/2, 100, 100, 0xff0000)
+                    .setInteractive({useHandCursor: true})
+                    .on("pointerup", () => {
+                        console.log("Hello")
+                        state=states.play
+                    }, )
+
+            introLayer.add([background, button])
+        }
+        if(oldState === states.intro && newState === states.play){
+            playLayer = scene.add.layer()
+            introLayer.destroy()
+
+            snake = new Snake(scene, 30, 30)
+            fruit = new Fruit(scene)
+            scoreText = scene.add.bitmapText(16, 16, "pixel10White", 'CFU: 0')
+            scoreText.setDepth(1)
+
+            pauseButton = scene.add.group()
+            let c = scene.add.circle(screenSize.width*0.95,  screenSize.height*0.05, gridCellSize/2, )
+                .setOrigin(1, 0)
+                .setInteractive({useHandCursor: true})
+                .on("pointerup", () => {state = states.pause})
+            let pauseImg = scene.add.image(screenSize.width*0.95,  screenSize.height*0.05, "pause").setOrigin(1,0)
+            pauseImg.displayHeight = gridCellSize
+            pauseImg.displayWidth = gridCellSize
+            
+            pauseButton.add(c)
+        }
+        if(oldState == states.play && newState == states.pause){
+            pauseLayer = scene.add.layer()
+
+            let r = scene.add.rectangle(0,0,screenSize.width,screenSize.height, 0xffffff, 0.75)
+            r.setOrigin(0)
+
+            let textPause = scene.add.bitmapText( screenSize.width/2, 3*gridCellSize, "pixel10Black", "PAUSE MENU")
+            textPause.setOrigin()
+
+            let rPlay = scene.add.rectangle(screenSize.width/2, 8*gridCellSize, 3*gridCellSize, 3*gridCellSize, )
+                .setOrigin(0.5).setInteractive()
+                .on("pointerup", () => {state = states.play})
+
+            let playBtn = scene.add.image(screenSize.width/2, 8*gridCellSize, "play")
+                playBtn.displayHeight = 3*gridCellSize
+                playBtn.displayWidth = 3*gridCellSize
+
+            pauseLayer.add([r, textPause, rPlay, playBtn])
+        }
+        if(oldState === states.pause && newState === states.play){
+            pauseLayer.destroy()
+        }
+        if(oldState === states.gameOver && newState === states.restartScreen){
+            gameOverLayer = scene.add.layer()
+            let r = scene.add.rectangle(0, 0, screenSize.width, screenSize.height, 0xffffff, 0.75).setOrigin(0)
+            let goText = scene.add.bitmapText(screenSize.width/2, screenSize.height/4, "pixel10Black", "GAME OVER",)
+                .setOrigin()
+            let addTxt
+            if(score < 180)
+                addTxt = scene.add.bitmapText(screenSize.width/2, screenSize.height/2+gridCellSize*1.4, "pixel10Black", "Non ti\nsei laureato! =(",)
+                    .setOrigin().setCenterAlign().setScale(0.75)
+            else if(score >= 180 && score < 300)
+                addTxt = scene.add.bitmapText(screenSize.width/2, screenSize.height/2+gridCellSize*1.4, "pixel10Black", "Non hai\npreso la\nmagistrale! =(",)
+                    .setOrigin().setCenterAlign().setScale(0.75)
+                    .setOrigin()
+
+            let restartBtn = scene.add.rectangle(screenSize.width/2, screenSize.height*0.8, 6*gridCellSize, 2*gridCellSize, 0x000000)
+                .setInteractive()
+                .on("pointerup", () => {state = states.intro})
+            let restartText = scene.add.bitmapText(screenSize.width/2+gridCellSize, screenSize.height*0.8, "pixel10White", "RESTART")
+                .setOrigin().setScale(0.5)
+            let rstImg = scene.add.image(screenSize.width/2-2*gridCellSize, screenSize.height*0.8, "restart")
+                rstImg.displayHeight = gridCellSize
+                rstImg.displayWidth = gridCellSize
+            
+            gameOverLayer.add([r, goText, addTxt, restartBtn, restartText, rstImg])
+        }
+    }
+
+    function preload (){
+        this.load.image("left", "./assets/left.webp")
+        this.load.image("right", "./assets/right.webp")
+        this.load.image("front", "./assets/front.webp")
+
+        this.load.image("play", "./assets/play-button.png")
+        this.load.image("pause", "./assets/pause-button.png")
+        this.load.image("restart", "./assets/restart-button.png")
+
+        this.load.image(cfu_images[0], "./assets/cfu_low.png")
+        this.load.image(cfu_images[1], "./assets/cfu_medium.png")
+        this.load.image(cfu_images[2], "./assets/cfu_high.png")
+
+        this.load.bitmapFont("pixel10Black", "./assets/pixel10Black.png", "./assets/pixel10.xml")
+        this.load.bitmapFont("pixel10White", "./assets/pixel10White.png", "./assets/pixel10.xml")
+    }
+
+
+    function create (){
+        sceneGlobal = this 
+
+        state = states.intro
+
+        gameOverLayer = this.add.layer()
+
+        cursors = this.input.keyboard.createCursorKeys();
+        this.input.addPointer(1)
+    
+    }
 
     // Update state ariables
     let spacePressed = false
     let touchActivated = false
     let touchEvent = false
+
+    let pauseButton 
     
     var states={
         play: 0,
@@ -565,29 +678,37 @@ window.onload = () => {
         intro: 2,
         credits: 3,
         gameOver: 4,
+        restartScreen: 7,
         laureaTriennale: 5,
         laureaMagistrale: 6,
     }
-    let state = states.play
+    
+    let state
+    let oldState = states.restartScreen
+
 
     let triennale = false
     let magistrale = false
 
     function update(time, delta){
-        console.log(state)
-         
-        // Pause trigger
-        if( cursors.space.isDown && !spacePressed ) spacePressed = true
-        if( cursors.space.isUp && spacePressed){
-            state = state == states.play ? states.pause : states.play
-            spacePressed = false
+        //console.log(state)
+
+        if(state != oldState){
+            console.log("Here")
+            stateTransition(this, state, oldState)
         }
+        
+        oldState = state
 
         switch(state){
             case states.pause:
-                return
+                state = checkSpaceButton(this, time)
+                break
             case states.play:
                 state = play(this, time)
+                break
+            case intro:
+                state = intro(this)
                 break
             case states.gameOver:
                 state = gameOver(this, time)
@@ -605,6 +726,7 @@ window.onload = () => {
             if(el[1].done)
 	    	ongoingAnimations.splice(el[0], 1)
         }
+
 
     }
 
