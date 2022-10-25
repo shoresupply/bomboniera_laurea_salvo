@@ -2,7 +2,7 @@
 <html lang="en"> 
 <head link rel="short cut icon" href="#"> 
     <meta charset="UTF-8" />
-    <title>Making your first Phaser 3 Game - Part 2</title>
+    <title>Jumping Salvo | la laurea di salvo</title>
     <script src="//cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
     <style type="text/css">
         body {
@@ -35,7 +35,7 @@ var jmpSpeed
 
 window.onload = () => {
   // Variabili globali
-  var score = 0;
+  var score = 100;
   var scoreText;
   var cfu
   var coin 
@@ -46,6 +46,8 @@ window.onload = () => {
   var tempospawngold = 25
   var platforms;
   
+  var cursors
+
   cfu_scores = [3, 6, 10];
   cfu_images = ["cfu_low", "cfu_med", "cfu_high"]
 
@@ -55,6 +57,9 @@ window.onload = () => {
 
   var screenSize = {width: window.innerWidth, height: window.innerHeight, }
   console.log("Innerwidth is "+ screenSize.width)
+
+  var initialPlayerPosition = new Phaser.Math.Vector2(screenSize.width/2, 0)
+  var initialEnemyPosition = new Phaser.Math.Vector2(screenSize.width*0.1, 0)
 
   physicsFactor = screenSize.height / 2
   jmpSpeed = physicsFactor 
@@ -87,6 +92,8 @@ window.onload = () => {
   }
 
   function preload (){
+      this.load.image("lt", "../laureaTriennale.jpg")
+
       this.load.image('sky', 'assets/sky.png');
       this.load.image('ground', 'assets/platform.png');
       
@@ -178,7 +185,7 @@ window.onload = () => {
 
     spriteScaleFactor = 2 * platformScaleFactor
 
-    enemy = this.physics.add.sprite(screenSize.width*0.1, screenSize.height * 0.5, 'enemy');
+    enemy = this.physics.add.sprite( initialEnemyPosition.x, initialEnemyPosition.y, 'enemy');
     enemy.setBounce(1,0);
     enemy.setCollideWorldBounds(true);
     enemy.scale = spriteScaleFactor
@@ -189,11 +196,11 @@ window.onload = () => {
     enemy.setVelocityX(enemyVelocity.x)
 
     // Place the player as a rigid active body
-    player = this.physics.add.sprite(screenSize.width/2, screenSize.height * 0.5, 'dude');
+    player = this.physics.add.sprite(initialPlayerPosition.x, initialPlayerPosition.y, 'dude');
     player.setBounce(1, 0);
     player.displayHeight = enemy.displayHeight * 1.5
     player.displayWidth = enemy.displayWidth
-    player.body.setSize(player.displayWidth)
+    player.body.setSize(enemy.height)
     player.setCollideWorldBounds(true);
     player.setVelocityX(playerVelocity)
 
@@ -218,7 +225,6 @@ window.onload = () => {
     });
     
     // Player-platfrom interaction 
-
     this.physics.add.collider(enemy, platforms);
     this.physics.add.collider(player, enemy, hitEnemy, null, this);
 
@@ -229,10 +235,13 @@ window.onload = () => {
     this.physics.add.overlap(player, cfu, collectcfu, null, this);
 
     this.cameras.main.startFollow(player);
+
     function collectcfu (player, cfu){   
         score += cfu.getData("value")
         cfu.destroy(true, true)
         scoreText.setText('Score: ' + score);
+        if(score >= 180 && ltDone === false) state = states.lt
+        if(score >= 300 && lmDone === false) state = sates.lm
     }
     function hitEnemy(player, enemy){
         player.setTint(0xff0000);
@@ -244,7 +253,7 @@ window.onload = () => {
     this.input.addPointer(1)
 
     scoreText = scene.add.bitmapText(16, 16, "pixel10Black", "Score: 0")
-
+    cursors = scene.input.keyboard.createCursorKeys(); // For keyboard input
   } // End of function create
 
   let nuovaVel = 0
@@ -269,7 +278,6 @@ window.onload = () => {
     checkPlayerAnimation()
 
     // input handlers
-    cursors = scene.input.keyboard.createCursorKeys(); // For keyboard input
     cameras = scene.cameras; // following the player
      
     if(cursors.right.isDown) player.setVelocityX(playerVelocity)
@@ -293,14 +301,17 @@ window.onload = () => {
         let dx = scene.input.activePointer.upX - scene.input.activePointer.downX
         let dy = scene.input.activePointer.upY - scene.input.activePointer.downY
         let threshold = 30
-        if(dy < -threshold && player.body.touching.down){ // jump
-            player.setVelocityY(-jmpSpeed); 
+        if(Math.abs(dx) > threshold || Math.abs(dy) >  threshold){ //swipe
+            if(Math.abs(dx) > Math.abs(dy)){ // horizontal swipe
+                if(dx < -threshold) player.setVelocityX(-playerVelocity)
+                else if(dx > threshold) player.setVelocityX(playerVelocity)
+            }else{ // vertical swipe
+                if(dy < -threshold && player.body.touching.down) // jump
+                   player.setVelocityY(-jmpSpeed); 
+                
+            }
         }
-        // change direction with swipe
-        else if(dx < -threshold) player.setVelocityX(-playerVelocity)
-        else if(dx > threshold) player.setVelocityX(playerVelocity)
-        else// invert on tap
-            player.setVelocityX( -player.body.velocity.x )
+        else player.setVelocityX( -player.body.velocity.x ) // invert on tap
         touchDown = false
     }
 
@@ -311,7 +322,8 @@ window.onload = () => {
     if (enemy.body.velocity.x < 0){
         enemy.setVelocityX(-enemyVelocity.x)
     }
-    enemyVelocity.x = score * 1.4 + initialEnemyVelocity
+    //enemyVelocity.x = score * 1.4 + initialEnemyVelocity
+    enemyVelocity.x = score * enemy.width *0.02 + initialEnemyVelocity
 
     return states.play
   }
@@ -326,13 +338,89 @@ window.onload = () => {
   function gameOver(scene, time){
     return states.gameOver
   }
-  function  intro(scene, time){
-          return states.intro
+  function intro(scene, time){
+    if(spacePressed === false && cursors.space.isDown) spacePressed = true
+    if(spacePressed === true && cursors.space.isUp){
+        spacePressed = false
+        return states.play
+    }
+
+    return states.intro
+  }
+
+  var ltImg, ltNextTime, ltSteps=30, ltCounter, ltState = 0
+  var ltBg 
+  let ltDone = false
+  function lt(scene, time){
+    console.log(ltCounter)
+    if(ltCounter > 0 && time >= ltNextTime){
+        ltCounter--
+        switch(ltState){
+            case 0:
+                ltImg.setY(ltImg.y - (ltImg.displayHeight+ltImg.displayHeight)/ltSteps)
+                ltBg.setFillStyle(0xffffff, (ltSteps-ltCounter) * 1/ltSteps)
+                ltNextTime = time + 100
+                break
+        }
+    }
+
+    if(ltCounter == 0){
+        switch(ltState){
+            case 0:
+                let gradText = scene.add.bitmapText(screenSize.width/2, screenSize.height*0.8,
+                    "pixel10White", "You Graduated! =D\nTap to continue")
+                    .setOrigin().setCenterAlign().setDepth(1)
+                let littleBg = scene.add.rectangle(screenSize.width/2, screenSize.height*0.8,
+                    gradText.width * 1.1, gradText.height * 1.1, 0x0)
+                ltLayer.add([gradText, littleBg])
+                ltBg.setInteractive().on("pointerup", () => {state = states.play})
+                ltState++
+                break
+            
+        }
+    }
+
+    return states.lt
+  }
+
+  var lmImg, lmNextTime, lmSteps=30, lmCounter, lmState = 0
+  var lmBg 
+  let lmDone = false
+  function lm(scene, time){
+    console.log(lmCounter)
+    if(lmCounter > 0 && time >= lmNextTime){
+        lmCounter--
+        switch(lmState){
+            case 0:
+                lmImg.setY(lmImg.y - (lmImg.displayHeight/2+lmImg.displayHeight/2)/lmSteps)
+                lmBg.setFillStyle(0xffffff, (lmSteps-lmCounter) * 1/lmSteps)
+                lmNextTime = time + 100
+                break
+        }
+    }
+
+    if(lmCounter == 0){
+        switch(lmState){
+            case 0:
+                let gradText = scene.add.bitmapText(screenSize.width/2, screenSize.height*0.8,
+                    "pixel10White", "You Graduated! =D\nTap to continue")
+                    .setOrigin().setCenterAlign().setDepth(1)
+                let littleBg = scene.add.rectangle(screenSize.width/2, screenSize.height*0.8,
+                    gradText.width * 1.1, gradText.height * 1.1, 0x0)
+                lmLayer.add([gradText, littleBg])
+                lmBg.setInteractive().on("pointerup", () => {state = states.play})
+                lmState++
+                break
+            
+        }
+    }
+
+    return states.lm
   }
 
   let pauseTime
   let playerPauseVelocity, enemyPauseVelocity
-  let pauseLayer, goLayer
+  let pauseLayer, goLayer, ltLayer, lmLayer
   function checkTransition(newState, oldState, time){
     console.log("Old: "+oldState+" new: "+ newState)
 
@@ -366,21 +454,43 @@ window.onload = () => {
         pauseLayer.destroy()
     }
     if(oldState === states.play && newState === states.gameOver){
-        goLayer = scene.add.layer()
-
-        goText = scene.add.bitmapText(screenSize.width/2, screenSize.height/2, "pixel10Black", "GAME OVER")
-            .setOrigin()
-
         scene.physics.pause()
 
-        goLayer.add([goText])
+        goLayer = scene.add.layer()
+
+        let goText = scene.add.bitmapText(screenSize.width/2, screenSize.height/2, "pixel10Black", "GAME OVER")
+            .setOrigin()
+        let goRestart = scene.add.rectangle(screenSize.width/2, screenSize.height/2*1.5, enemy.width*8, enemy.width*2, 0x0)
+            .setOrigin().setInteractive().on("pointerup", () => {console.log("restart"); state = states.intro})
+        let goRestartText = scene.add.bitmapText(screenSize.width/2-enemy.width*2, screenSize.height/2*1.5, "pixel10White", "RESTART")
+            .setScale(0.75).setOrigin(0,0.5)
+        let goRestartImg = scene.add.image(screenSize.width/2-enemy.width*3, screenSize.height/2*1.5, "restart")
+            goRestartImg.displayHeight = enemy.width
+            goRestartImg.displayWidth = enemy.width
+
+        goLayer.add([goText, goRestart, goRestartText, goRestartImg])
     }
-    if(oldState === null && newState === states.intro){
+    if(oldState === states.gameOver && newState === states.intro){
+        if(runFirst){
+            goLayer.destroy()
+            cfu.clear(true, true)
+            enemy.setPosition(initialEnemyPosition.x, initialEnemyPosition.y)
+            player.setPosition(initialPlayerPosition.x, initialPlayerPosition.y)
+            scene.physics.resume()
+            player.clearTint()
+        }
         introLayer = scene.add.layer()
+
+        player.setVelocity(0, 5000)
+        enemy.setVelocity(0, 5000)
+        player.setVisible(false)
+        enemy.setVisible(false)
+        scoreText.setText("")
         let introText = scene.add.bitmapText(screenSize.width/2, screenSize.height/2*0.8,
-            "pixel10Black", "SWIPE TO JUMP, TOUCH FOR CHANGE DIRECTION").setOrigin().setCenterAlign()
-        let playButton = scene.add.image(screenSize.width/2, screenSize.height/2,
-            "PLAY").setOrigin()
+            "pixel10Black", "SWIPE UP TO JUMP\nTAP TO CHANGE DIRECTION\n\nOR\n\nUSE THE\nARROW KEYS")
+            .setOrigin().setCenterAlign().setScale(0.5)
+        let playButton = scene.add.image(screenSize.width/2, screenSize.height * 0.75,
+            "play").setOrigin()
             .setInteractive().on("pointerup", () => {state = states.play})
         playButton.displayHeight = screenSize.height * 0.1
         playButton.displayWidth = screenSize.height * 0.1
@@ -389,7 +499,47 @@ window.onload = () => {
         introLayer.add([introText,playButton])
     }
     if(oldState === states.intro && newState === states.play){
+        nextSpawnTime1 = time + 0
+        nextSpawnTime2 = time + tempospawncoin * 1000
+        nextSpawnTime3 = time + tempospawngold * 1000
+
+        runFirst = true
+        player.setVelocityX(playerVelocity)
+        enemy.setVelocityX(enemyVelocity.x)
+        player.setVisible(true)
+        enemy.setVisible(true)
+        scoreText.setText("Score: "+score)
+        introLayer.destroy()
+    }
+    if(oldState === states.play && newState === states.lt){
+        ltDone = true
+        ltCounter = ltSteps
+        ltNextTime = time + 100
+
+        scene.physics.pause()
+        player.anims.play("turn")
+
+        ltLayer = scene.add.layer()
+        
+        ltBg = scene.add.rectangle(0, 0, 
+            screenSize.width, screenSize.height)
+            .setOrigin(0,0)
+
+        ltImg = scene.add.image(screenSize.width/2, screenSize.height, "lt")
+            .setOrigin(.5)
+        let ratio = ltImg.displayHeight / ltImg.displayWidth
+        ltImg.displayWidth = screenSize.width * 0.8
+        ltImg.displayHeight = ltImg.displayWidth * ratio
+
+        ltImg.setY(screenSize.height + ltImg.displayHeight / 2)
+
+        ltLayer.add([ltBg, ltImg])
+    }
+    if(oldState === states.lt && newState === states.play){
+        ltLayer.destroy()
         scene.physics.resume()
+        nuovaVel = 0
+        checkPlayerAnimation()
     }
   }
 
@@ -399,10 +549,13 @@ window.onload = () => {
     intro: 2,
     gameOver: 3,
     restartScreen: 4,
+    lt: 5,
+    lm: 6,
   }
 
-  var state = states.play
-  var oldState = states.intro
+  var runFirst = false
+  var state = states.intro
+  var oldState = states.gameOver
   function update(time, delta){ // Called each frame 
 
     if(state != oldState){
@@ -422,6 +575,9 @@ window.onload = () => {
             break
         case states.intro:
             state = intro(scene,time)
+            break
+        case states.lt:
+            state = lt(scene, time)
             break
     }
 
