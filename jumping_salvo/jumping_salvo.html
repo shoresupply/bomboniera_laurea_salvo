@@ -44,15 +44,14 @@ window.onload = () => {
   var tempoPersonale = 1 // Tempo in secondi
   var tempospawncoin = 13
   var tempospawngold = 25
-  let nuova = 0
-  let vecchia = 0
   var platforms;
   
   cfu_scores = [3, 6, 10];
   cfu_images = ["cfu_low", "cfu_med", "cfu_high"]
 
-  let enemyVelocity = 100
-  let initialEnemyVelocity = enemyVelocity
+  let initialEnemyVelocity = 100
+  let enemyVelocity = new Phaser.Math.Vector2(initialEnemyVelocity, 0)
+  let playerVelocity = 200
 
   var screenSize = {width: window.innerWidth, height: window.innerHeight, }
   console.log("Innerwidth is "+ screenSize.width)
@@ -79,7 +78,6 @@ window.onload = () => {
   };
 
   var game = new Phaser.Game(config);
-  let RightPressed = false
 
   function randomCoordinates(){
     xRand = Math.random() * screenSize.width * 0.8 + screenSize.width * 0.1
@@ -90,17 +88,22 @@ window.onload = () => {
 
   function preload (){
       this.load.image('sky', 'assets/sky.png');
-
       this.load.image('ground', 'assets/platform.png');
       
-      this.load.image('low', 'assets/star.png');
-      this.load.image('med', 'assets/coin.png');
-      this.load.image('high', 'assets/gold.png');
+      this.load.image('low', 'assets/cfu_low.png');
+      this.load.image('med', 'assets/cfu_medium.png');
+      this.load.image('high', 'assets/cfu_high.png');
+
+      this.load.image("play", "./assets/play-button.png")
+      this.load.image("pause", "./assets/pause-button.png")
+      this.load.image("restart", "./assets/restart-button.png")
+      this.load.bitmapFont("pixel10Black", "./assets/pixel10Black.png", "./assets/pixel10.xml")
+      this.load.bitmapFont("pixel10White", "./assets/pixel10White.png", "./assets/pixel10.xml")
       
       this.load.image('bomb', 'assets/bomb.png');
       
       this.load.image ('piattaforma2', 'assets/piattaforma2.png');
-      this.load.spritesheet('dude', 'assets/dude.png', { frameWidth: 32, frameHeight: 48 });
+      this.load.spritesheet('dude', 'assets/dude.webp', { frameWidth: 160, frameHeight: 240 });
       this.load.image('enemy', 'assets/enemy.png');
   }
   
@@ -109,23 +112,28 @@ window.onload = () => {
   function spawn(time){
     if(time < nextTime) return
     else nextTime = time + 100
+    let newCfu = null
     if(time > nextSpawnTime1){
         pos = randomCoordinates()
-        cfu.create(pos.x, pos.y, 'low').setData({"value": cfu_scores[0]})
+        newCfu = cfu.create(pos.x, pos.y, 'low').setData({"value": cfu_scores[0]})
         tempoPersonale = score < 80 ? 0.1 * score + 3 : tempoPersonale = 0.95
         nextSpawnTime1 = time + tempoPersonale * 1000
     }
     if(time > nextSpawnTime2){
         pos = randomCoordinates()
-        cfu.create(pos.x, pos.y, 'med').setData({"value": cfu_scores[1]})
+        newCfu = cfu.create(pos.x, pos.y, 'med').setData({"value": cfu_scores[1]})
         tempospawncoin = score < 80 ? 0.17 * score + 3 : tempospawncoin = 9
         nextSpawnTime2 = time + tempospawncoin * 1000
     }
     if(time > nextSpawnTime3){
         pos = randomCoordinates()
-        cfu.create(pos.x, pos.y, 'high').setData({"value": cfu_scores[2]})
+        newCfu = cfu.create(pos.x, pos.y, 'high').setData({"value": cfu_scores[2]})
         tempospawngold = score < 80 ? 0.25 * score + 3 : tempospawngold = 13
         nextSpawnTime3 = time + tempospawngold * 1000
+    }
+    if(newCfu != null){
+        newCfu.displayHeight = enemy.displayWidth / 2
+        newCfu.displayWidth = enemy.displayWidth / 2
     }
   }
   
@@ -170,18 +178,25 @@ window.onload = () => {
 
     spriteScaleFactor = 2 * platformScaleFactor
 
-    // Place the player as a rigid active body
-    player = this.physics.add.sprite(screenSize.width/2, screenSize.height * 0.5, 'dude');
-    player.setBounce(1, 0);
-    player.scale = spriteScaleFactor;
-    player.setCollideWorldBounds(true);
-
     enemy = this.physics.add.sprite(screenSize.width*0.1, screenSize.height * 0.5, 'enemy');
     enemy.setBounce(1,0);
     enemy.setCollideWorldBounds(true);
     enemy.scale = spriteScaleFactor
-    enemy.setVelocityX(enemyVelocity)
-    //enemy.setSize(48, 58, false)
+
+    playerVelocity = enemy.displayWidth * 5
+    enemyVelocity.x = playerVelocity/2
+
+    enemy.setVelocityX(enemyVelocity.x)
+
+    // Place the player as a rigid active body
+    player = this.physics.add.sprite(screenSize.width/2, screenSize.height * 0.5, 'dude');
+    player.setBounce(1, 0);
+    player.displayHeight = enemy.displayHeight * 1.5
+    player.displayWidth = enemy.displayWidth
+    player.body.setSize(player.displayWidth)
+    player.setCollideWorldBounds(true);
+    player.setVelocityX(playerVelocity)
+
 
     // Create animations for the player (used when the player moves)
     this.anims.create({ // Going left
@@ -210,86 +225,183 @@ window.onload = () => {
     this.physics.add.collider(player, platforms);
 
     this.physics.add.collider(cfu, platforms);
-    this.physics.add.collider(coin, platforms);
-    this.physics.add.collider(gold, platforms);
     
     this.physics.add.overlap(player, cfu, collectcfu, null, this);
-    this.physics.add.overlap(player, coin, collectcfu, null, this);
-    this.physics.add.overlap(player, gold, collectcfu, null, this);
 
     this.cameras.main.startFollow(player);
-    player.setVelocityX(200)
     function collectcfu (player, cfu){   
         score += cfu.getData("value")
         cfu.destroy(true, true)
         scoreText.setText('Score: ' + score);
     }
-    function collectgold (player, gold){   
-        gold.destroy(true, true);
-        score += 10;
-        scoreText.setText('Score: ' + score);
-    }
     function hitEnemy(player, enemy){
-        this.physics.pause();
         player.setTint(0xff0000);
-        player.anims.play('turn');
-        gameOver = true;
-        
+        player.body.setVelocityX(0)
+        checkPlayerAnimation()
+        state = states.gameOver
     }
 
-    function collectcoin (player, coin){   
-        coin.destroy(true, true);
+    this.input.addPointer(1)
 
-        score += 15;
-        scoreText.setText('Score: ' + score);
-    }
-    scoreText = this.add.text(16, 16, 'score: 0', { fontSize: '32px', fill: '#000' });
+    scoreText = scene.add.bitmapText(16, 16, "pixel10Black", "Score: 0")
+
   } // End of function create
 
-  function update(time, delta){ // Called each frame 
+  let nuovaVel = 0
+  let vecchiaVel = 0
+  function checkPlayerAnimation(){
+    // Animation
+    vecchiaVel = nuovaVel
+    nuovaVel = player.body.velocity.x 
+    if (nuovaVel != vecchiaVel){
+        if (nuovaVel>0) player.anims.play('right', true)
+        else if (nuovaVel < 0) player.anims.play("left", true)
+        else player.anims.play("turn", true)
+
+    }  
+  }
+
+  let spacePressed = false, touchDown = false
+  function play(scene, time){
 
     spawn(time)
 
-    vecchia = nuova
-    nuova = player.body.velocity.x 
-    if (nuova != vecchia){
-        if (nuova>0){
-            player.anims.play('right', true);
-        }
-        else {
-            player.anims.play('left', true);
-        
-        }
-    }
+    checkPlayerAnimation()
 
-    cursors = this.input.keyboard.createCursorKeys(); // For keyboard input
-    cameras = this.cameras; // following the player
+    // input handlers
+    cursors = scene.input.keyboard.createCursorKeys(); // For keyboard input
+    cameras = scene.cameras; // following the player
      
-    if (RightPressed == false && cursors.right.isDown){
-        RightPressed = true
-        }
-    if (RightPressed == true && cursors.right.isUp){
-           player.setVelocityX( -nuova )
-           RightPressed = false
-           
+    if(cursors.right.isDown) player.setVelocityX(playerVelocity)
+    if(cursors.left.isDown) player.setVelocityX( -playerVelocity )
+
+    if(spacePressed === false && cursors.space.isDown) spacePressed = true
+    if(spacePressed === true && cursors.space.isUp){
+        spacePressed = false
+        return states.pause
     }
-
-
     if (cursors.up.isDown && player.body.touching.down){ // up key is pressed and the player is on gruound
         player.setVelocityY(-jmpSpeed); // set velocity
     }
+
+    if(scene.input.activePointer.isDown && !touchDown){
+        console.log("touch down")
+        touchDown = true
+    }
+    if(!scene.input.activePointer.isDown && touchDown){
+        console.log("touch up")
+        let dx = scene.input.activePointer.upX - scene.input.activePointer.downX
+        let dy = scene.input.activePointer.upY - scene.input.activePointer.downY
+        let threshold = 30
+        if(dy < -threshold && player.body.touching.down){ // jump
+            player.setVelocityY(-jmpSpeed); 
+        }
+        // change direction with swipe
+        else if(dx < -threshold) player.setVelocityX(-playerVelocity)
+        else if(dx > threshold) player.setVelocityX(playerVelocity)
+        else// invert on tap
+            player.setVelocityX( -player.body.velocity.x )
+        touchDown = false
+    }
+
+    // Enemy speed based on score
     if (enemy.body.velocity.x > 0){
-        enemy.setVelocityX(enemyVelocity)
+        enemy.setVelocityX(enemyVelocity.x)
     }
     if (enemy.body.velocity.x < 0){
-        enemy.setVelocityX(-enemyVelocity)
+        enemy.setVelocityX(-enemyVelocity.x)
     }
-    document.addEventListener("touchstart", e => {
-        console.log('ciao')
-    })
+    enemyVelocity.x = score * 1.4 + initialEnemyVelocity
 
-    
-    enemyVelocity = score * 1.4 + initialEnemyVelocity
+    return states.play
+  }
+  function pause(scene, time){
+    if(spacePressed === false && cursors.space.isDown) spacePressed = true
+    if(spacePressed === true && cursors.space.isUp){
+        spacePressed = false
+        return states.play
+    }
+    return states.pause
+  }
+  function gameOver(scene, time){
+    return states.gameOver
+  }
+
+  let pauseTime
+  let playerPauseVelocity, enemyPauseVelocity
+  let pauseLayer, goLayer
+  function checkTransition(newState, oldState, time){
+    console.log("Old: "+oldState+" new: "+ newState)
+    if(oldState === states.play && newState == states.pause){
+        scene.physics.pause()
+        player.anims.play("turn", true)
+
+        pauseLayer = scene.add.layer()
+
+        let pauseText = scene.add.bitmapText(screenSize.width/2, screenSize.height/2*0.8,
+            "pixel10Black", "PAUSE").setOrigin().setCenterAlign()
+
+        let playButton = scene.add.image(screenSize.width/2, screenSize.height/2,
+            "play").setOrigin()
+            .setInteractive().on("pointerup", () => {state = states.play})
+        playButton.displayHeight = screenSize.height * 0.1
+        playButton.displayWidth = screenSize.height * 0.1
+
+        pauseTime = time
+        pauseLayer.add([pauseText, playButton])
+    }
+    if(oldState === states.pause && newState == states.play){
+        scene.physics.resume()
+        nuovaVel = 0
+        checkPlayerAnimation()
+
+        nextSpawnTime1 += time - pauseTime
+        nextSpawnTime2 += time - pauseTime
+        nextSpawnTime3 += time - pauseTime
+
+        pauseLayer.destroy()
+    }
+    if(oldState === states.play && newState === states.gameOver){
+        goLayer = scene.add.layer()
+
+        goText = scene.add.bitmapText(screenSize.width/2, screenSize.height/2, "pixel10Black", "GAME OVER")
+            .setOrigin()
+
+        scene.physics.pause()
+
+        goLayer.add([goText])
+    }
+  }
+
+  var states = {
+    play: 0,
+    pause: 1,
+    intro: 2,
+    gameOver: 3,
+    restartScreen: 4,
+  }
+
+  var state = states.play
+  var oldState = states.intro
+  function update(time, delta){ // Called each frame 
+
+    if(state != oldState){
+        console.log("Old: "+oldState+" new: "+ state)
+        checkTransition(state, oldState, time)
+    }
+    oldState = state
+    switch(state){
+        case states.play:
+            state = play(scene, time)
+            break
+        case states.pause:
+            state = pause(scene, time)
+            break
+        case states.gameOver:
+            state = gameOver(scene, time)
+            break
+    }
+
   } // function update end. 
   
 }
