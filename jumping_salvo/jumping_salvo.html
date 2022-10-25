@@ -116,7 +116,7 @@ window.onload = () => {
     if(time > nextSpawnTime1){
         pos = randomCoordinates()
         newCfu = cfu.create(pos.x, pos.y, 'low').setData({"value": cfu_scores[0]})
-        tempoPersonale = score < 80 ? 0.1 * score + 3 : tempoPersonale = 0.95
+        tempoPersonale = score < 80 ? 0.1 * score + 3 : tempoPersonale = 2
         nextSpawnTime1 = time + tempoPersonale * 1000
     }
     if(time > nextSpawnTime2){
@@ -326,12 +326,16 @@ window.onload = () => {
   function gameOver(scene, time){
     return states.gameOver
   }
+  function  intro(scene, time){
+          return states.intro
+  }
 
   let pauseTime
   let playerPauseVelocity, enemyPauseVelocity
   let pauseLayer, goLayer
   function checkTransition(newState, oldState, time){
     console.log("Old: "+oldState+" new: "+ newState)
+
     if(oldState === states.play && newState == states.pause){
         scene.physics.pause()
         player.anims.play("turn", true)
@@ -371,6 +375,22 @@ window.onload = () => {
 
         goLayer.add([goText])
     }
+    if(oldState === null && newState === states.intro){
+        introLayer = scene.add.layer()
+        let introText = scene.add.bitmapText(screenSize.width/2, screenSize.height/2*0.8,
+            "pixel10Black", "SWIPE TO JUMP, TOUCH FOR CHANGE DIRECTION").setOrigin().setCenterAlign()
+        let playButton = scene.add.image(screenSize.width/2, screenSize.height/2,
+            "PLAY").setOrigin()
+            .setInteractive().on("pointerup", () => {state = states.play})
+        playButton.displayHeight = screenSize.height * 0.1
+        playButton.displayWidth = screenSize.height * 0.1
+
+
+        introLayer.add([introText,playButton])
+    }
+    if(oldState === states.intro && newState === states.play){
+        scene.physics.resume()
+    }
   }
 
   var states = {
@@ -399,6 +419,9 @@ window.onload = () => {
             break
         case states.gameOver:
             state = gameOver(scene, time)
+            break
+        case states.intro:
+            state = intro(scene,time)
             break
     }
 
